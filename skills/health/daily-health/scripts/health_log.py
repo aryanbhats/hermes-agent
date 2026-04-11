@@ -101,8 +101,8 @@ def log_event(
         raise ValueError(f"Invalid source '{source}'. Must be one of: {sorted(VALID_SOURCES)}")
     ts = _utc_now()
     data_str = json.dumps(data) if data else None
-    conn = _get_conn()
     with _lock:
+        conn = _get_conn()
         try:
             conn.execute("BEGIN IMMEDIATE")
             conn.execute(
