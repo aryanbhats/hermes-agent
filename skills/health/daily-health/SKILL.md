@@ -1,5 +1,5 @@
 ---
-name: daily-health
+name: health
 description: Daily health coach — WHOOP check-ins, habit logging, melatonin reminders, never-miss-twice detection
 version: 1.0.0
 author: Hermes Agent
