@@ -173,3 +173,11 @@ When running as a cron job for the Wednesday blood work reminder:
 2. If "NOT_SCHEDULED": Send "Hey — you still need to book your blood work. Tests needed: TSH, Free T4, Free T3, TPO antibodies, Vitamin D. This is your Week 12 decision point."
 3. If "SCHEDULED: <date>": Send "Blood work coming up on <date>. Fast 12h before if fasting labs."
 4. If "COMPLETED": [SILENT] — suppress delivery
+## Knowledge Vault Bridge (Optional)
+
+When the user has been slipping on habits for 3+ days in a row, or expresses frustration about consistency, you may optionally query the knowledge vault for motivational frameworks:
+
+- Use `mcp_knowledge-vault_search_knowledge` with queries like "never miss twice", "consistency", "discipline", "identity habits"
+- If relevant frameworks found, weave a brief insight into your response
+- Keep it to one line — don't turn health logging into a lecture
+- Only do this when the user seems receptive (expressing frustration, asking for help) — not on routine log confirmations
