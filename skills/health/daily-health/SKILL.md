@@ -163,6 +163,22 @@ Mood: avg {X}/10 (trend: ↑/↓/→)
 🎯 Next week: {one actionable suggestion}
 ```
 
+4b. Run health insights script to get one smart insight:
+    ```
+    HEALTH_LOG_CMD=insights python ~/.hermes/scripts/health_insights_cli.py
+    ```
+    Pick the most interesting finding from:
+    - Sleep/recovery correlation
+    - HRV trend direction
+    - Habit/recovery correlations
+    Use it as the 💡 Insight line in the weekly message.
+
+4c. Check phase transition readiness:
+    ```
+    HEALTH_LOG_CMD=phase_check HEALTH_LOG_ARGS='{"current_phase":1}' python ~/.hermes/scripts/health_insights_cli.py
+    ```
+    If 80%+ criteria met, add a line: "📋 Phase transition: {N}/{total} criteria met. {blocker details}"
+
 5. Log as system summary event (type=summary, subtype=weekly)
 
 ## Blood Work Reminder (Cron Job Context)
