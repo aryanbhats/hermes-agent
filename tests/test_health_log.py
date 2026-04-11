@@ -79,7 +79,7 @@ class TestHealthLog(unittest.TestCase):
     def test_wal_mode_enabled(self):
         import sqlite3
         # Trigger DB creation via the module so WAL is set
-        self.hl.log_event(type="habit", subtype="test", source="user")
+        self.hl.log_event(type="habit", subtype="walk", source="user")
         conn = sqlite3.connect(self.db_path)
         mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
         conn.close()

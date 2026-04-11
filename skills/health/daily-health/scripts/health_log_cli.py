@@ -17,8 +17,12 @@ cmd = os.environ.get("HEALTH_LOG_CMD", "")
 args = json.loads(os.environ.get("HEALTH_LOG_ARGS", "{}"))
 
 if cmd == "log":
-    log_event(**args)
-    print("OK")
+    try:
+        log_event(**args)
+        print("OK")
+    except ValueError as e:
+        print(f"VALIDATION ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
 elif cmd == "last_interaction":
     print(last_user_interaction() or "NEVER")
 elif cmd == "today":

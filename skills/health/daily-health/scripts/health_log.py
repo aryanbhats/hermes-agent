@@ -67,6 +67,14 @@ def _today_utc_start() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z")
 
 
+VALID_TYPES = {"checkin", "response", "habit", "evening", "symptom", "nudge"}
+VALID_SUBTYPES = {
+    "walk", "meal", "supplement", "smoke", "nebulize", "weight",
+    "sighing", "sunlight", "gita", "noon", "miss2",
+}
+VALID_SOURCES = {"user", "system"}
+
+
 def log_event(
     type: str,
     subtype: str = None,
@@ -76,7 +84,17 @@ def log_event(
     data: dict = None,
     note: str = None,
 ) -> None:
-    """Insert a health event. System events are deduplicated per day."""
+    """Insert a health event. System events are deduplicated per day.
+
+    Validates type, subtype, and source against allowed values.
+    Raises ValueError for invalid inputs.
+    """
+    if type not in VALID_TYPES:
+        raise ValueError(f"Invalid type '{type}'. Must be one of: {sorted(VALID_TYPES)}")
+    if subtype is not None and subtype not in VALID_SUBTYPES:
+        raise ValueError(f"Invalid subtype '{subtype}'. Must be one of: {sorted(VALID_SUBTYPES)}")
+    if source not in VALID_SOURCES:
+        raise ValueError(f"Invalid source '{source}'. Must be one of: {sorted(VALID_SOURCES)}")
     ts = _utc_now()
     data_str = json.dumps(data) if data else None
     conn = _get_conn()
