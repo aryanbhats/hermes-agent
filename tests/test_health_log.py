@@ -102,3 +102,158 @@ class TestHealthLog(unittest.TestCase):
         self.assertEqual(len(errors), 0, f"Concurrent write errors: {errors}")
         events = self.hl.today_events()
         self.assertEqual(len(events), 40)
+
+    # ---- Phase 2 Tests ----
+
+    def test_new_types_valid(self):
+        """mood, weight, bloodwork, summary types should not raise ValueError."""
+        for t in ("mood", "weight", "bloodwork", "summary"):
+            self.hl.log_event(type=t, source="user")
+
+    def test_new_subtypes_valid(self):
+        """weekly, appointment, result, photo subtypes should not raise ValueError."""
+        for st in ("weekly", "appointment", "result", "photo"):
+            self.hl.log_event(type="habit", subtype=st, source="user")
+
+    def _init_db_and_connect(self):
+        """Helper: ensure schema exists, return a raw sqlite3 connection for direct inserts."""
+        import sqlite3
+        # Trigger schema creation via the module
+        init_conn = self.hl._get_conn()
+        init_conn.close()
+        return sqlite3.connect(self.db_path)
+
+    def test_weight_trend_basic(self):
+        """Log 3 weight events, verify trend returns them sorted + weekly averages."""
+        conn = self._init_db_and_connect()
+        conn.execute(
+            "INSERT INTO health_events (ts, source, type, subtype, value, unit) VALUES (?, ?, ?, ?, ?, ?)",
+            ("2026-04-01T08:00:00Z", "user", "habit", "weight", 72.0, "kg"),
+        )
+        conn.execute(
+            "INSERT INTO health_events (ts, source, type, subtype, value, unit) VALUES (?, ?, ?, ?, ?, ?)",
+            ("2026-04-03T08:00:00Z", "user", "habit", "weight", 71.5, "kg"),
+        )
+        conn.execute(
+            "INSERT INTO health_events (ts, source, type, subtype, value, unit) VALUES (?, ?, ?, ?, ?, ?)",
+            ("2026-04-05T08:00:00Z", "user", "habit", "weight", 71.0, "kg"),
+        )
+        conn.commit()
+        conn.close()
+
+        result = self.hl.weight_trend(days=30)
+        self.assertEqual(len(result["entries"]), 3)
+        # Sorted ascending by ts
+        self.assertAlmostEqual(result["entries"][0]["value"], 72.0)
+        self.assertAlmostEqual(result["entries"][2]["value"], 71.0)
+        # Weekly averages present
+        self.assertIn("weekly_averages", result)
+        self.assertIsInstance(result["weekly_averages"], list)
+        self.assertTrue(len(result["weekly_averages"]) > 0)
+
+    def test_weight_trend_empty(self):
+        """No weight events returns empty."""
+        result = self.hl.weight_trend(days=30)
+        self.assertEqual(result["entries"], [])
+        self.assertEqual(result["weekly_averages"], [])
+
+    def test_mood_trend_with_rolling_avg(self):
+        """Log 10 mood events, verify 7-day rolling average computed."""
+        conn = self._init_db_and_connect()
+        for i in range(10):
+            day = f"2026-04-{i+1:02d}"
+            conn.execute(
+                "INSERT INTO health_events (ts, source, type, value) VALUES (?, ?, ?, ?)",
+                (f"{day}T20:00:00Z", "user", "mood", float(i + 1)),
+            )
+        conn.commit()
+        conn.close()
+
+        result = self.hl.mood_trend(days=30)
+        self.assertEqual(len(result["entries"]), 10)
+        self.assertIn("rolling_7day_avg", result)
+        self.assertIsInstance(result["rolling_7day_avg"], list)
+        # Rolling avg should have 10 entries (one per data point)
+        self.assertEqual(len(result["rolling_7day_avg"]), 10)
+
+    def test_mood_trend_includes_evening_values(self):
+        """Evening events with values count as mood data."""
+        conn = self._init_db_and_connect()
+        conn.execute(
+            "INSERT INTO health_events (ts, source, type, value) VALUES (?, ?, ?, ?)",
+            ("2026-04-01T21:00:00Z", "user", "evening", 4.0),
+        )
+        conn.execute(
+            "INSERT INTO health_events (ts, source, type, value) VALUES (?, ?, ?, ?)",
+            ("2026-04-02T20:00:00Z", "user", "mood", 7.0),
+        )
+        conn.commit()
+        conn.close()
+
+        result = self.hl.mood_trend(days=30)
+        self.assertEqual(len(result["entries"]), 2)
+        self.assertAlmostEqual(result["entries"][0]["value"], 4.0)
+        self.assertAlmostEqual(result["entries"][1]["value"], 7.0)
+
+    def test_weekly_summary_aggregation(self):
+        """Log mixed events, verify counts, averages."""
+        conn = self._init_db_and_connect()
+        # 3 walks, 2 supplements, 1 mood, 1 weight on different days
+        for i, (t, st, v) in enumerate([
+            ("habit", "walk", 25.0),
+            ("habit", "walk", 30.0),
+            ("habit", "walk", 20.0),
+            ("habit", "supplement", None),
+            ("habit", "supplement", None),
+            ("mood", None, 7.0),
+            ("habit", "weight", 71.5),
+        ]):
+            day = f"2026-04-{i+1:02d}"
+            conn.execute(
+                "INSERT INTO health_events (ts, source, type, subtype, value) VALUES (?, ?, ?, ?, ?)",
+                (f"{day}T10:00:00Z", "user", t, st, v),
+            )
+        conn.commit()
+        conn.close()
+
+        result = self.hl.weekly_summary(days=30)
+        self.assertEqual(result["habit_counts"]["walk"], 3)
+        self.assertEqual(result["habit_counts"]["supplement"], 2)
+        self.assertAlmostEqual(result["mood_avg"], 7.0)
+        self.assertAlmostEqual(result["weight_latest"], 71.5)
+        self.assertEqual(result["total_events"], 7)
+        self.assertEqual(result["days_with_user_events"], 7)
+
+    def test_weekly_summary_empty_week(self):
+        """No events returns zero counts."""
+        result = self.hl.weekly_summary(days=7)
+        self.assertEqual(result["habit_counts"], {})
+        self.assertIsNone(result["mood_avg"])
+        self.assertIsNone(result["weight_latest"])
+        self.assertEqual(result["total_events"], 0)
+        self.assertEqual(result["days_with_user_events"], 0)
+
+    def test_bloodwork_status_not_scheduled(self):
+        """No bloodwork events returns not_scheduled."""
+        result = self.hl.bloodwork_status()
+        self.assertEqual(result["status"], "not_scheduled")
+
+    def test_bloodwork_status_scheduled(self):
+        """Appointment event exists returns scheduled."""
+        self.hl.log_event(
+            type="bloodwork", subtype="appointment", source="user",
+            note="April 20",
+        )
+        result = self.hl.bloodwork_status()
+        self.assertEqual(result["status"], "scheduled")
+        self.assertEqual(result["date"], "April 20")
+
+    def test_bloodwork_status_completed(self):
+        """Result event exists returns completed."""
+        self.hl.log_event(
+            type="bloodwork", subtype="result", source="user",
+            data={"TSH": 4.2, "FreeT4": 1.1},
+        )
+        result = self.hl.bloodwork_status()
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["data"]["TSH"], 4.2)

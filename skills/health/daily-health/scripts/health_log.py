@@ -67,10 +67,14 @@ def _today_utc_start() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z")
 
 
-VALID_TYPES = {"checkin", "response", "habit", "evening", "symptom", "nudge"}
+VALID_TYPES = {
+    "checkin", "response", "habit", "evening", "symptom", "nudge",
+    "mood", "weight", "bloodwork", "summary",
+}
 VALID_SUBTYPES = {
     "walk", "meal", "supplement", "smoke", "nebulize", "weight",
     "sighing", "sunlight", "gita", "noon", "miss2",
+    "weekly", "appointment", "result", "photo",
 }
 VALID_SOURCES = {"user", "system"}
 
@@ -183,5 +187,147 @@ def events_range(days: int) -> list[dict]:
             "SELECT * FROM health_events WHERE ts >= ? ORDER BY ts", (cutoff,)
         ).fetchall()
         return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def weight_trend(days: int = 30) -> dict:
+    """Query weight events, return entries sorted by ts + weekly averages grouped by ISO week."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime(
+        "%Y-%m-%dT00:00:00Z"
+    )
+    conn = _get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT ts, value FROM health_events "
+            "WHERE type='habit' AND subtype='weight' AND ts >= ? "
+            "ORDER BY ts",
+            (cutoff,),
+        ).fetchall()
+        entries = [{"ts": r["ts"], "value": r["value"]} for r in rows]
+
+        # Group by ISO week
+        week_buckets: dict[str, list[float]] = {}
+        for e in entries:
+            dt = datetime.strptime(e["ts"], "%Y-%m-%dT%H:%M:%SZ")
+            iso_year, iso_week, _ = dt.isocalendar()
+            key = f"{iso_year}-W{iso_week:02d}"
+            week_buckets.setdefault(key, []).append(e["value"])
+
+        weekly_averages = [
+            {"week": k, "avg": sum(v) / len(v)}
+            for k, v in sorted(week_buckets.items())
+        ]
+
+        return {"entries": entries, "weekly_averages": weekly_averages}
+    finally:
+        conn.close()
+
+
+def mood_trend(days: int = 30) -> dict:
+    """Query mood and evening-with-value events, return entries + rolling 7-day average."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime(
+        "%Y-%m-%dT00:00:00Z"
+    )
+    conn = _get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT ts, value FROM health_events "
+            "WHERE ((type='mood') OR (type='evening' AND value IS NOT NULL)) "
+            "AND ts >= ? ORDER BY ts",
+            (cutoff,),
+        ).fetchall()
+        entries = [{"ts": r["ts"], "value": r["value"]} for r in rows]
+
+        # Compute rolling 7-day average for each data point
+        rolling_7day_avg = []
+        for i, e in enumerate(entries):
+            dt_current = datetime.strptime(e["ts"], "%Y-%m-%dT%H:%M:%SZ")
+            window_start = dt_current - timedelta(days=7)
+            window_vals = [
+                entries[j]["value"]
+                for j in range(i + 1)
+                if datetime.strptime(entries[j]["ts"], "%Y-%m-%dT%H:%M:%SZ") > window_start
+            ]
+            avg = sum(window_vals) / len(window_vals) if window_vals else None
+            rolling_7day_avg.append({"ts": e["ts"], "avg": avg})
+
+        return {"entries": entries, "rolling_7day_avg": rolling_7day_avg}
+    finally:
+        conn.close()
+
+
+def weekly_summary(days: int = 7) -> dict:
+    """Aggregate events over the last N days."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime(
+        "%Y-%m-%dT00:00:00Z"
+    )
+    conn = _get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM health_events WHERE ts >= ? ORDER BY ts", (cutoff,)
+        ).fetchall()
+        events = [dict(r) for r in rows]
+
+        # habit_counts
+        habit_counts: dict[str, int] = {}
+        for e in events:
+            if e["type"] == "habit" and e["subtype"]:
+                habit_counts[e["subtype"]] = habit_counts.get(e["subtype"], 0) + 1
+
+        # mood_avg from mood events and evening events with value
+        mood_vals = [
+            e["value"]
+            for e in events
+            if (e["type"] == "mood" or (e["type"] == "evening" and e["value"] is not None))
+            and e["value"] is not None
+        ]
+        mood_avg = sum(mood_vals) / len(mood_vals) if mood_vals else None
+
+        # weight_latest
+        weight_events = [
+            e for e in events
+            if e["type"] == "habit" and e["subtype"] == "weight" and e["value"] is not None
+        ]
+        weight_latest = weight_events[-1]["value"] if weight_events else None
+
+        # total_events
+        total_events = len(events)
+
+        # days_with_user_events
+        user_days = set()
+        for e in events:
+            if e["source"] == "user":
+                day = e["ts"][:10]  # YYYY-MM-DD
+                user_days.add(day)
+        days_with_user_events = len(user_days)
+
+        return {
+            "habit_counts": habit_counts,
+            "mood_avg": mood_avg,
+            "weight_latest": weight_latest,
+            "total_events": total_events,
+            "days_with_user_events": days_with_user_events,
+        }
+    finally:
+        conn.close()
+
+
+def bloodwork_status() -> dict:
+    """Return most recent bloodwork event status."""
+    conn = _get_conn()
+    try:
+        row = conn.execute(
+            "SELECT * FROM health_events WHERE type='bloodwork' ORDER BY ts DESC LIMIT 1"
+        ).fetchone()
+        if not row:
+            return {"status": "not_scheduled"}
+        e = dict(row)
+        if e["subtype"] == "appointment":
+            return {"status": "scheduled", "date": e["note"] or (json.loads(e["data"]) if e["data"] else {}).get("date")}
+        if e["subtype"] == "result":
+            data = json.loads(e["data"]) if e["data"] else {}
+            return {"status": "completed", "data": data}
+        return {"status": "not_scheduled"}
     finally:
         conn.close()

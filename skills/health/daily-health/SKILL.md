@@ -42,6 +42,10 @@ When the user sends `/health` followed by natural language, parse and log the ev
 | "weight 71.2" | type=habit, subtype=weight, value=71.2 |
 | "had chicken rice eggs" | type=habit, subtype=meal, note="chicken rice eggs", data={"protein_est": <estimate>} |
 | "mood 4" or "feeling good" | type=evening, value=<1-5> |
+| "mood 7" or "feeling great" | type=mood, value=7 |
+| "weight 72.1" | type=weight, value=72.1, unit=kg |
+| "booked blood work for April 20" | type=bloodwork, subtype=appointment, note="April 20" |
+| "blood results: TSH 4.2" | type=bloodwork, subtype=result, data={"TSH": 4.2} |
 | "wheeze less today" | type=symptom, note="wheeze less today" |
 | "clean today" or "didn't smoke" | type=response, data={"smoked": false} |
 
@@ -66,7 +70,11 @@ More examples:
 - Smoked: `✓ type: habit | subtype: smoke` → "Noted. One slip doesn't undo your progress. Don't buy a pack. Tomorrow is a new day."
 - Weight: `✓ type: habit | subtype: weight | value: 71.2` → "71.2 kg logged."
 - Meal: `✓ type: habit | subtype: meal | protein_est: 45` → "~45g protein estimate."
-- Mood: `✓ type: evening | value: 4` → "Mood 4 logged."
+- Mood (evening): `✓ type: evening | value: 4` → "Mood 4 logged."
+- Mood (explicit): `✓ type: mood | value: 7` → "Mood 7 logged."
+- Weight: `✓ type: weight | value: 72.1 | unit: kg` → "72.1 kg logged."
+- Blood work appointment: `✓ type: bloodwork | subtype: appointment` → "Blood work booked for April 20."
+- Blood results: `✓ type: bloodwork | subtype: result` → "Results logged."
 - Symptom: `✓ type: symptom | note: wheeze less today` → "Noted."
 
 The echo line lets the user see exactly what was stored. If they see a wrong parse, they can correct it.
@@ -123,3 +131,45 @@ When running as a cron job for the evening reminder:
 When running as a cron job for the noon supplement nudge:
 - Send: "Hey — did you take your supplements? Just checking."
 - Log as system nudge event (subtype: noon)
+
+## Weekly Review (Cron Job Context)
+
+When running as a cron job for the Sunday weekly review:
+
+1. Call `mcp_whoop_get_recoveries` with limit=7
+2. Call `mcp_whoop_get_sleeps` with limit=7
+3. Read the pre-run script output (weekly summary JSON)
+4. Format a Telegram message:
+
+```
+Weekly Health Review — [date range]
+
+📊 WHOOP Trends (7 days)
+Recovery: avg {X}% (best: {day} {Y}%, worst: {day} {Z}%)
+HRV: avg {X}ms (trend: ↑/↓/→)
+RHR: avg {X} bpm
+SpO2: avg {X}%
+Sleep: avg {X}h {Y}min
+
+✅ Habits This Week
+Walks: {N}/7 | Supplements: {N}/7 | Nebulized: {N}/7
+Smoked: {N} days | Sighing: {N}/7
+
+📈 Tracking
+Weight: {latest} kg (Δ {change} from last week)
+Mood: avg {X}/10 (trend: ↑/↓/→)
+
+💡 Insight: {one data-driven observation}
+🎯 Next week: {one actionable suggestion}
+```
+
+5. Log as system summary event (type=summary, subtype=weekly)
+
+## Blood Work Reminder (Cron Job Context)
+
+When running as a cron job for the Wednesday blood work reminder:
+
+1. Read the pre-run script output
+2. If "NOT_SCHEDULED": Send "Hey — you still need to book your blood work. Tests needed: TSH, Free T4, Free T3, TPO antibodies, Vitamin D. This is your Week 12 decision point."
+3. If "SCHEDULED: <date>": Send "Blood work coming up on <date>. Fast 12h before if fasting labs."
+4. If "COMPLETED": [SILENT] — suppress delivery
