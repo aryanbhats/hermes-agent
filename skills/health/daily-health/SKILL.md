@@ -123,3 +123,12 @@ When running as a cron job for the evening reminder:
 When running as a cron job for the noon supplement nudge:
 - Send: "Hey — did you take your supplements? Just checking."
 - Log as system nudge event (subtype: noon)
+
+## Knowledge Vault Bridge (Optional)
+
+When the user has been slipping on habits for 3+ days in a row, or expresses frustration about consistency, you may optionally query the knowledge vault for motivational frameworks:
+
+- Use `mcp_knowledge-vault_search_knowledge` with queries like "never miss twice", "consistency", "discipline", "identity habits"
+- If relevant frameworks found, weave a brief insight into your response
+- Keep it to one line — don't turn health logging into a lecture
+- Only do this when the user seems receptive (expressing frustration, asking for help) — not on routine log confirmations
