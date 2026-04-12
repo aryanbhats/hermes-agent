@@ -115,6 +115,11 @@ class TestHealthLog(unittest.TestCase):
         for st in ("weekly", "appointment", "result", "photo"):
             self.hl.log_event(type="habit", subtype=st, source="user")
 
+    def test_mobility_subtypes_valid(self):
+        """stretch and mobility subtypes should not raise ValueError."""
+        for st in ("stretch", "mobility"):
+            self.hl.log_event(type="habit", subtype=st, source="user", note=f"{st}-note")
+
     def _init_db_and_connect(self):
         """Helper: ensure schema exists, return a raw sqlite3 connection for direct inserts."""
         import sqlite3

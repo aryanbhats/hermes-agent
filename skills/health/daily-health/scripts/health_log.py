@@ -75,6 +75,7 @@ VALID_SUBTYPES = {
     "walk", "meal", "supplement", "smoke", "nebulize", "weight",
     "sighing", "sunlight", "gita", "noon", "miss2",
     "weekly", "appointment", "result", "photo",
+    "stretch", "mobility",
 }
 VALID_SOURCES = {"user", "system"}
 

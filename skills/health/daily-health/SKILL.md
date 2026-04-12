@@ -53,7 +53,7 @@ When the user sends `/health` followed by natural language, parse and log the ev
 
 Run via terminal tool:
 ```
-HEALTH_LOG_CMD=log HEALTH_LOG_ARGS='{"type":"habit","subtype":"walk","source":"user","value":25,"unit":"min"}' python ~/.hermes/scripts/health_log_cli.py
+HEALTH_LOG_CMD=log HEALTH_LOG_ARGS='{"type":"habit","subtype":"walk","source":"user","value":25,"unit":"min"}' /Users/aryanbhatia/Documents/0DevProjects/hermes-agent/.venv/bin/python ~/.hermes/scripts/health_log_cli.py
 ```
 
 ### Response Style
@@ -110,7 +110,7 @@ Type /health to log habits anytime.
 
 4. Log the WHOOP data as a system checkin:
 ```
-HEALTH_LOG_CMD=log HEALTH_LOG_ARGS='{"type":"checkin","source":"system","data":{...whoop data...}}' python ~/.hermes/scripts/health_log_cli.py
+HEALTH_LOG_CMD=log HEALTH_LOG_ARGS='{"type":"checkin","source":"system","data":{...whoop data...}}' /Users/aryanbhatia/Documents/0DevProjects/hermes-agent/.venv/bin/python ~/.hermes/scripts/health_log_cli.py
 ```
 
 5. Check the script output (injected before prompt). If it says "NEVER" or the timestamp is >48h ago, append:
@@ -120,11 +120,22 @@ Missing once is fine. Missing twice starts a new habit.
 Even just saying /health alive counts.
 ```
 
+6. **Mobility prescription** — append a one-line stretch prescription based on recovery:
+   - **Red (<34%)** — "Mobility: 5min gentle. Cat/cow x10, hip openers, diaphragmatic breathing x5."
+   - **Yellow (34-66%)** — "Mobility: 8-10min dynamic. Leg swings, t-spine rotations, glute activation."
+   - **Green (67%+)** — "Mobility: 10-15min full. Dynamic + loaded mobility + primer set."
+
+   Log the prescription as a habit event with subtype `stretch`:
+   ```
+   HEALTH_LOG_CMD=log HEALTH_LOG_ARGS='{"type":"habit","subtype":"stretch","source":"system","note":"<prescription>"}' /Users/aryanbhatia/Documents/0DevProjects/hermes-agent/.venv/bin/python ~/.hermes/scripts/health_log_cli.py
+   ```
+
 ## Evening Reminder (Cron Job Context)
 
 When running as a cron job for the evening reminder:
-- Send: "Melatonin time. Take half a tab now. Blue light glasses on in an hour."
-- Log as system evening event
+- Send: "Melatonin time — take half a tab now. Blue light glasses on in an hour. Before sleep: 5-10min wind-down mobility — pigeon pose (1min/side), thoracic spine rotations, diaphragmatic breathing x10."
+- Log the melatonin cue as a system evening event
+- Remind the user to log the mobility as `habit/mobility` when complete (they log via /health mobility)
 
 ## Noon Nudge (Cron Job Context)
 
@@ -165,7 +176,7 @@ Mood: avg {X}/10 (trend: ↑/↓/→)
 
 4b. Run health insights script to get one smart insight:
     ```
-    HEALTH_LOG_CMD=insights python ~/.hermes/scripts/health_insights_cli.py
+    HEALTH_LOG_CMD=insights /Users/aryanbhatia/Documents/0DevProjects/hermes-agent/.venv/bin/python ~/.hermes/scripts/health_insights_cli.py
     ```
     Pick the most interesting finding from:
     - Sleep/recovery correlation
@@ -175,7 +186,7 @@ Mood: avg {X}/10 (trend: ↑/↓/→)
 
 4c. Check phase transition readiness:
     ```
-    HEALTH_LOG_CMD=phase_check HEALTH_LOG_ARGS='{"current_phase":1}' python ~/.hermes/scripts/health_insights_cli.py
+    HEALTH_LOG_CMD=phase_check HEALTH_LOG_ARGS='{"current_phase":1}' /Users/aryanbhatia/Documents/0DevProjects/hermes-agent/.venv/bin/python ~/.hermes/scripts/health_insights_cli.py
     ```
     If 80%+ criteria met, add a line: "📋 Phase transition: {N}/{total} criteria met. {blocker details}"
 
