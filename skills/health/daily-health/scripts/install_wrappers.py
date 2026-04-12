@@ -15,6 +15,9 @@ WRAPPERS = [
     "health_morning_query.py",
     "health_noon_query.py",
     "health_log_cli.py",
+    "health_weekly_query.py",
+    "health_bloodwork_query.py",
+    "health_insights_cli.py",
 ]
 
 def install():
